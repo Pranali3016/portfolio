@@ -22,12 +22,16 @@ document.addEventListener('DOMContentLoaded', () => {
      Skipped entirely for reduced-motion — native `scroll-behavior:
      smooth` from style.css still covers anchor jumps in that case.
   --------------------------------------------------------- */
+  const isTouchDevice = window.matchMedia('(hover: none), (pointer: coarse)').matches;
   let lenis = null;
-  if (!prefersReducedMotion && window.Lenis && window.gsap) {
+  if (!prefersReducedMotion && !isTouchDevice && window.Lenis && window.gsap) {
     lenis = new Lenis({ duration: 1.38, smoothWheel: true });
     gsap.ticker.add((time) => lenis.raf(time * 1000));
     gsap.ticker.lagSmoothing(0);
   }
+  /* Touch devices fall back to native scrolling, which is already
+     compositor-driven and smoother than a JS reimplementation — CSS
+     `scroll-behavior: smooth` (style.css) still covers anchor jumps. */
 
   /* ---------------------------------------------------------
      Animated neural-network background (canvas)
@@ -42,8 +46,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const MOUSE_RADIUS = 140;
     let mouse = { x: -9999, y: -9999, active: false };
 
-    const countFor = (w, h) => Math.min(52, Math.max(22, Math.round((w * h) / 34000)));
-    const sparkleCountFor = (w, h) => Math.min(100, Math.max(40, Math.round((w * h) / 17000)));
+    const countFor = (w, h) => isMobile
+      ? Math.min(28, Math.max(14, Math.round((w * h) / 34000)))
+      : Math.min(52, Math.max(22, Math.round((w * h) / 34000)));
+    const sparkleCountFor = (w, h) => isMobile
+      ? Math.min(50, Math.max(18, Math.round((w * h) / 17000)))
+      : Math.min(100, Math.max(40, Math.round((w * h) / 17000)));
 
     /* Node glow is an identical radial gradient for every node of a given
        color, just re-centered — pre-rendering it once as a sprite and
@@ -76,10 +84,16 @@ document.addEventListener('DOMContentLoaded', () => {
       };
     };
 
+    const isMobile = window.innerWidth <= 768;
+
     const resize = () => {
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      dpr = Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2);
       width = window.innerWidth;
-      height = document.documentElement.scrollHeight;
+      /* The canvas is position:fixed — content beyond one viewport's
+         height is never visible, so there's no reason to allocate or
+         redraw a backing store the size of the full page. Cap it to
+         the same bound the node/sparkle population already uses. */
+      height = Math.min(document.documentElement.scrollHeight, Math.round(window.innerHeight * 1.6));
       canvas.width = width * dpr;
       canvas.height = height * dpr;
       canvas.style.height = height + 'px';
@@ -151,12 +165,12 @@ document.addEventListener('DOMContentLoaded', () => {
       nextShootingStarAt = performance.now() + 6000 + Math.random() * 6000;
     };
 
-    const drawShootingStar = () => {
+    const drawShootingStar = (dt = 1) => {
       if (!shootingStar) return;
       const s = shootingStar;
-      s.x += s.vx;
-      s.y += s.vy;
-      s.life++;
+      s.x += s.vx * dt;
+      s.y += s.vy * dt;
+      s.life += dt;
 
       // Ease in, hold, ease out — smoother than a hard cutoff
       const lifeP = s.life / s.maxLife;
@@ -190,12 +204,12 @@ document.addEventListener('DOMContentLoaded', () => {
       if (s.y > height * 0.75 || s.x < -80 || s.x > width + 80 || s.life > s.maxLife) shootingStar = null;
     };
 
-    const step = () => {
+    const step = (dt = 1) => {
       ctx.clearRect(0, 0, width, height);
 
       nodes.forEach(n => {
-        n.x += n.vx;
-        n.y += n.vy;
+        n.x += n.vx * dt;
+        n.y += n.vy * dt;
 
         // gentle repulsion around the cursor
         if (mouse.active) {
@@ -235,7 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       maybeSpawnPulse(liveLinks);
       maybeSpawnShootingStar();
-      drawShootingStar();
+      drawShootingStar(dt);
 
       // glowing nodes (soft radial fill reads as "alive" rather than flat dots)
       nodes.forEach(n => {
@@ -253,11 +267,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // small drifting, twinkling sparkles — a separate live layer over the network
       sparkles.forEach(s => {
-        s.x += s.vx;
-        s.y += s.vy;
+        s.x += s.vx * dt;
+        s.y += s.vy * dt;
         if (s.x < 0) s.x = width; else if (s.x > width) s.x = 0;
         if (s.y < 0) s.y = height; else if (s.y > height) s.y = 0;
-        s.phase += s.speed;
+        s.phase += s.speed * dt;
 
         const twinkle = (Math.sin(s.phase) + 1) / 2; // 0 -> 1 -> 0
         const alpha = 0.14 + twinkle * 0.5;
@@ -281,13 +295,22 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.beginPath();
         ctx.arc(x, y, 6, 0, Math.PI * 2);
         ctx.fill();
-        p.t += 0.02;
+        p.t += 0.02 * dt;
       });
     };
 
     let rafId;
     let loopRunning = false;
-    const loop = () => { step(); rafId = requestAnimationFrame(loop); };
+    let frameCount = 0;
+    const loop = () => {
+      frameCount++;
+      if (isMobile && frameCount % 2 !== 0) {
+        rafId = requestAnimationFrame(loop);
+        return;
+      }
+      step(isMobile ? 2 : 1);
+      rafId = requestAnimationFrame(loop);
+    };
     const startLoop = () => {
       if (loopRunning || prefersReducedMotion) return;
       loopRunning = true;
@@ -398,6 +421,31 @@ document.addEventListener('DOMContentLoaded', () => {
   onScrollNav();
   if (nav) scrollCallbacks.push(onScrollNav);
 
+  /* Pause continuously-running decorative CSS animations once their
+     element scrolls off-screen, so they stop costing frame time until
+     they're back in view. Applies everywhere (desktop benefits too),
+     but matters most on mobile where every extra always-on animation
+     competes with scroll for the same frame budget. */
+  if (!prefersReducedMotion) {
+    const pauseOffscreenAnimations = (selector) => {
+      const els = document.querySelectorAll(selector);
+      if (!els.length) return;
+      const obs = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          // Clear the inline override when visible so CSS (including the
+          // existing hover-to-pause rule on the marquees) governs normally;
+          // only force a pause, inline, once it's actually off-screen.
+          entry.target.style.animationPlayState = entry.isIntersecting ? '' : 'paused';
+        });
+      }, { threshold: 0, rootMargin: '100px' });
+      els.forEach(el => obs.observe(el));
+    };
+    pauseOffscreenAnimations('.project-device');
+    pauseOffscreenAnimations('.pipe-node-end');
+    pauseOffscreenAnimations('.marquee-track');
+    pauseOffscreenAnimations('.tag-marquee-track');
+  }
+
   /* Subtle depth: the aurora and grid background layers drift at slightly
      different speeds as you scroll, on top of their own idle animation */
   const bgAurora = document.getElementById('bgAuroraWrap');
@@ -491,21 +539,29 @@ document.addEventListener('DOMContentLoaded', () => {
   const heroWords = document.querySelectorAll('#heroTitle .word');
   const heroEl0 = document.getElementById('top');
 
+  const heroIsMobile = window.matchMedia('(max-width: 767px)').matches;
+
   const playHeroIntro = () => {
     gsap.set(letters, { opacity: 0, y: 10 });
     gsap.to(letters, { opacity: 1, y: 0, duration: 0.5, ease: 'power4.out', stagger: 0.03 });
-    gsap.set(heroWords, { opacity: 0, y: 40, rotateX: -40 });
-    gsap.to(heroWords, {
-      opacity: 1, y: 0, rotateX: 0,
-      duration: 1.12,
-      ease: 'expo.out',
-      stagger: 0.15,
-      delay: 0.3
-    });
+    if (heroIsMobile) {
+      gsap.set(heroWords, { opacity: 0, y: 20 });
+      gsap.to(heroWords, { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out', stagger: 0.1, delay: 0.2 });
+    } else {
+      gsap.set(heroWords, { opacity: 0, y: 40, rotateX: -40 });
+      gsap.to(heroWords, {
+        opacity: 1, y: 0, rotateX: 0,
+        duration: 1.12,
+        ease: 'expo.out',
+        stagger: 0.15,
+        delay: 0.3
+      });
+    }
   };
   const resetHeroIntro = () => {
     gsap.set(letters, { opacity: 0, y: 10 });
-    gsap.set(heroWords, { opacity: 0, y: 40, rotateX: -40 });
+    if (heroIsMobile) gsap.set(heroWords, { opacity: 0, y: 20 });
+    else gsap.set(heroWords, { opacity: 0, y: 40, rotateX: -40 });
   };
 
   if (prefersReducedMotion || !window.gsap) {
@@ -530,7 +586,7 @@ document.addEventListener('DOMContentLoaded', () => {
         heroOrbs.classList.toggle('is-offscreen', !entry.isIntersecting);
       });
     }, { threshold: 0 });
-    orbsObserver.observe(heroOrbs);
+    orbsObserver.observe(heroEl0 || heroOrbs);
   }
 
   /* Subtle parallax: hero text and portrait drift a few px opposite the

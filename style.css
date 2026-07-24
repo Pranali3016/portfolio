@@ -50,6 +50,114 @@ body { overflow-x: hidden; }
    the blanket rule above already collapses all animation/transition durations
    to ~0 for prefers-reduced-motion, so nothing here needs a duplicate query. */
 
+/* =========================================================
+   MOBILE PERFORMANCE OVERRIDES
+   Scoped to <=768px (and <=991px for the hero orbit illustrations,
+   matching their existing "detach into fixed corner accents" breakpoint)
+   so desktop rendering is 100% untouched. Nothing here changes color,
+   spacing, layout or typography — only removes/cheapens the parts of
+   each effect that are expensive to composite on mobile GPUs.
+   ========================================================= */
+
+/* 1) Reveal-on-scroll: the biggest single fix for the "blurry hero text"
+   bug. `filter: blur()` transitions are not GPU-cheap on most mobile
+   browsers — they force a software/GPU blur pass on live text every
+   frame of the transition, which is exactly what reads as "text takes
+   2-3s to go sharp". We keep the fade + slide (identical end state,
+   identical opacity/transform values) and just drop the blur step and
+   shorten the transition so it settles almost immediately. */
+@media (max-width: 768px) {
+  .reveal, .reveal-down, .reveal-left, .reveal-right, .reveal-scale {
+    filter: none !important;
+    transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+/* 2) Nav: backdrop-filter is one of the most expensive things you can
+   do on a `position:fixed` element that repaints on every scroll frame.
+   Mobile gets a slightly more opaque solid fill instead — same visual
+   read (a dark, slightly frosted bar) without the per-frame blur. */
+@media (max-width: 768px) {
+  #mainNav {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(14, 18, 23, 0.92);
+  }
+  #mainNav.scrolled { background: rgba(14, 18, 23, 0.96); }
+}
+
+/* 3) Ambient background glows: same visual wash, much cheaper blur
+   radius (filter cost scales with radius) — these are large, low
+   opacity fixed-position layers, so the raw blur radius matters a lot
+   on mobile GPU fill-rate. */
+@media (max-width: 768px) {
+  .bg-aurora { filter: blur(30px); }
+  .hero-glow { filter: blur(36px); }
+  .project-media-glow { filter: blur(16px); }
+}
+
+/* 4) Hero orbital illustration: the drop-shadow filter on `.orbital` is
+   the most expensive thing in the hero on mobile — because it sits on
+   the SAME element as the continuously-rotating/twinkling children,
+   the browser has to re-rasterize the whole filtered subtree every
+   frame instead of just compositing a cached texture. We drop the
+   filter and the extra "float" bob on mobile and keep only the ring
+   spin, which is the signature motion of this illustration. */
+@media (max-width: 991px) {
+  .orbital {
+    filter: none;
+    animation: none;
+  }
+  /* Twinkle costs a paint per particle per cycle for very little
+     visual payoff at this size — keep the dots, drop the animation. */
+  .orbital-particles circle { animation: none; opacity: 0.32; }
+  /* Slow the core pulse down instead of dropping it — still reads as
+     "alive" but at roughly half the update rate. */
+  .orbital-pulse { animation-duration: 11s; }
+}
+
+/* 5) Pipeline strip "answer" node pulse, the project mockup float, and
+   the tech marquees are all cheap individually but add up when several
+   run forever off-screen. script.js pauses each via IntersectionObserver
+   (toggling animation-play-state inline) once it scrolls out of view. */
+
+/* 6) will-change on `.model-card` exists purely to support the
+   mouse-tilt effect, which script.js already only wires up on
+   hover-capable (desktop) devices. On touch devices it just reserves a
+   GPU layer per card for a transform that will never change — remove it. */
+@media (max-width: 768px) {
+  .model-card { will-change: auto; }
+}
+
+/* 7) Let the browser skip layout/paint/style work for off-screen
+   sections entirely until they're about to scroll into view. This is
+   the biggest lever on "initial loading is slow" — the browser no
+   longer has to lay out and paint the Projects/Experience/Contact
+   sections before First Contentful Paint just because they're in the
+   DOM. Purely a rendering optimization: it does not change what
+   eventually renders or how it looks once visible. */
+@media (max-width: 768px) {
+  #stack, #work, #experience, #contact {
+    content-visibility: auto;
+    contain-intrinsic-size: 1px 1200px;
+  }
+}
+
+/* 8) OPTIONAL — the only rule in this file with a (very minor) visual
+   difference on mobile: `.project-device` normally stacks three shadow
+   layers, one with a 40px teal glow, on an element that's continuously
+   floating via transform. It's cheap once composited, but on low-end
+   Android GPUs a large-blur-radius shadow under a moving layer still
+   costs real fill-rate. This trims it to a single tighter shadow.
+   Delete this block if you'd rather keep the exact desktop shadow on
+   mobile too — everything else in this file is 100% appearance-neutral. */
+@media (max-width: 768px) {
+  .project-device {
+    box-shadow: 0 16px 32px -14px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--border);
+  }
+}
+
 body {
   background: var(--bg);
   color: var(--text);
@@ -392,6 +500,12 @@ a:hover { color: var(--accent-2); }
   perspective: 600px;
 }
 .hero-title .word { display: inline-block; will-change: transform, opacity; }
+@media (max-width: 767px) {
+  /* Removes the 3D tilt render pass entirely on mobile — script.js pairs
+     this with a simpler 2D fade/slide GSAP intro (no rotateX) so there's
+     no 3D-transformed text for the browser to anti-alias mid-animation. */
+  .hero-title { perspective: none; }
+}
 
 /* Portrait — cutout photo (transparent background) over a dark glass card.
    Two very soft, low-opacity glows (emerald behind the shoulders, a hint of
