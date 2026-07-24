@@ -45,6 +45,37 @@ document.addEventListener('DOMContentLoaded', () => {
     const countFor = (w, h) => Math.min(52, Math.max(22, Math.round((w * h) / 34000)));
     const sparkleCountFor = (w, h) => Math.min(100, Math.max(40, Math.round((w * h) / 17000)));
 
+    /* Node glow is an identical radial gradient for every node of a given
+       color, just re-centered — pre-rendering it once as a sprite and
+       stamping it with drawImage avoids allocating a new gradient object
+       for every node on every single animation frame (the biggest per-frame
+       cost in this loop, and the main source of mobile jank). Rebuilt
+       whenever dpr changes so the sprite stays crisp on the actual device. */
+    let glowSprites = {};
+    const buildGlowSprite = (color, r) => {
+      const d = r * 2; // CSS-px diameter covering the full radial gradient
+      const sprite = document.createElement('canvas');
+      sprite.width = Math.ceil(d * dpr);
+      sprite.height = Math.ceil(d * dpr);
+      const sctx = sprite.getContext('2d');
+      const cx = sprite.width / 2, cy = sprite.height / 2, sr = r * dpr;
+      const g = sctx.createRadialGradient(cx, cy, 0, cx, cy, sr);
+      g.addColorStop(0, `rgba(${color},0.95)`);
+      g.addColorStop(0.5, `rgba(${color},0.2)`);
+      g.addColorStop(1, `rgba(${color},0)`);
+      sctx.fillStyle = g;
+      sctx.beginPath();
+      sctx.arc(cx, cy, sr, 0, Math.PI * 2);
+      sctx.fill();
+      return sprite;
+    };
+    const buildGlowSprites = () => {
+      glowSprites = {
+        teal: buildGlowSprite(ACCENT, 2.1 * 6),
+        violet: buildGlowSprite(ACCENT2, 2.5 * 6)
+      };
+    };
+
     const resize = () => {
       dpr = Math.min(window.devicePixelRatio || 1, 2);
       width = window.innerWidth;
@@ -53,6 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
       canvas.height = height * dpr;
       canvas.style.height = height + 'px';
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      buildGlowSprites();
 
       const target = countFor(width, Math.min(height, window.innerHeight * 1.6));
       nodes = Array.from({ length: target }, () => ({
@@ -209,14 +241,9 @@ document.addEventListener('DOMContentLoaded', () => {
       nodes.forEach(n => {
         const color = n.violet ? ACCENT2 : ACCENT;
         const r = n.violet ? 2.5 : 2.1;
-        const glow = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, r * 6);
-        glow.addColorStop(0, `rgba(${color},0.95)`);
-        glow.addColorStop(0.5, `rgba(${color},0.2)`);
-        glow.addColorStop(1, `rgba(${color},0)`);
-        ctx.fillStyle = glow;
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, r * 6, 0, Math.PI * 2);
-        ctx.fill();
+        const sprite = n.violet ? glowSprites.violet : glowSprites.teal;
+        const d = r * 12; // 2 * (r * 6), matches the sprite's CSS-px diameter
+        if (sprite) ctx.drawImage(sprite, n.x - d / 2, n.y - d / 2, d, d);
 
         ctx.beginPath();
         ctx.fillStyle = `rgba(${color},0.95)`;
@@ -431,9 +458,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Toggle (not unobserve) so every section replays its entrance each time
     // it scrolls into view, and resets once it scrolls back out — scrolling
     // down plays it, scrolling back up resets it, scrolling down replays it.
+    // will-change is applied only while a transition is actually running —
+    // promoting every reveal element to its own layer for the page's whole
+    // lifetime is wasted GPU memory/compositing cost, especially on mobile.
+    const clearWillChange = (e) => {
+      if (e.target === e.currentTarget) e.target.style.willChange = 'auto';
+    };
     const revealObserver = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
-        entry.target.classList.toggle('visible', entry.isIntersecting);
+        const el = entry.target;
+        el.style.willChange = 'transform, opacity';
+        el.addEventListener('transitionend', clearWillChange, { once: true });
+        el.classList.toggle('visible', entry.isIntersecting);
       });
     }, { threshold: 0.15, rootMargin: '0px 0px -8% 0px' });
 
