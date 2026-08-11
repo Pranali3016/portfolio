@@ -1562,7 +1562,6 @@ a:hover { color: #FFF; }
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  overscroll-behavior: contain;
 }
 /* Premium Chat Scrollbar */
 .chat-messages::-webkit-scrollbar {
