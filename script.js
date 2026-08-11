@@ -1,10 +1,15 @@
+/* =========================================================
+   PRANALI HAGARE — PORTFOLIO CLIENT LOGIC & AI ENGINE
+   Smooth Lenis Scrolling, Vivid Cyan (#00D9FF) Neural Mesh,
+   Interactive AI Chatbot with Domain Guardrails, and Animations.
+   ========================================================= */
+
 document.addEventListener('DOMContentLoaded', () => {
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  /* Shared scroll dispatcher: every scroll-driven update below registers
-     a callback here instead of adding its own scroll listener, so a
-     single passive listener + a single rAF-guard drives all of them —
-     avoids stacking redundant listeners and duplicate layout reads. */
+  /* ---------------------------------------------------------
+     01. SHARED SCROLL DISPATCHER
+  --------------------------------------------------------- */
   const scrollCallbacks = [];
   let scrollTicking = false;
   const onSharedScroll = () => {
@@ -17,175 +22,127 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   /* ---------------------------------------------------------
-     Lenis smooth scrolling, synced to GSAP's ticker so every
-     scroll-driven animation below reads off the same clock.
-     Skipped entirely for reduced-motion — native `scroll-behavior:
-     smooth` from style.css still covers anchor jumps in that case.
+     02. LENIS SMOOTH SCROLLING
   --------------------------------------------------------- */
   const isTouchDevice = window.matchMedia('(hover: none), (pointer: coarse)').matches;
   let lenis = null;
   if (!prefersReducedMotion && !isTouchDevice && window.Lenis && window.gsap) {
-    lenis = new Lenis({ duration: 1.38, smoothWheel: true });
+    lenis = new Lenis({
+      duration: 1.3,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      smoothWheel: true
+    });
     gsap.ticker.add((time) => lenis.raf(time * 1000));
     gsap.ticker.lagSmoothing(0);
   }
-  /* Touch devices fall back to native scrolling, which is already
-     compositor-driven and smoother than a JS reimplementation — CSS
-     `scroll-behavior: smooth` (style.css) still covers anchor jumps. */
 
   /* ---------------------------------------------------------
-     Animated neural-network background (canvas)
+     03. TOAST NOTIFICATION HELPER
+  --------------------------------------------------------- */
+  const toastEl = document.getElementById('appToast');
+  let toastTimer = null;
+  const showToast = (message, duration = 3000) => {
+    if (!toastEl) return;
+    clearTimeout(toastTimer);
+    toastEl.innerHTML = `<span>✓</span> ${message}`;
+    toastEl.classList.add('show');
+    toastTimer = setTimeout(() => {
+      toastEl.classList.remove('show');
+    }, duration);
+  };
+
+  /* ---------------------------------------------------------
+     04. INTERACTIVE NEURAL PARTICLE NETWORK (CANVAS)
   --------------------------------------------------------- */
   const canvas = document.getElementById('bgCanvas');
   if (canvas) {
     const ctx = canvas.getContext('2d');
-    let width, height, nodes, sparkles, dpr, pulses = [], shootingStar = null;
-    const ACCENT = '50,240,210';   // teal
-    const ACCENT2 = '108,141,255'; // soft blue
-    const LINK_DIST = 150;
-    const MOUSE_RADIUS = 140;
-    let mouse = { x: -9999, y: -9999, active: false };
-
-    const countFor = (w, h) => isMobile
-      ? Math.min(28, Math.max(14, Math.round((w * h) / 34000)))
-      : Math.min(52, Math.max(22, Math.round((w * h) / 34000)));
-    const sparkleCountFor = (w, h) => isMobile
-      ? Math.min(50, Math.max(18, Math.round((w * h) / 17000)))
-      : Math.min(100, Math.max(40, Math.round((w * h) / 17000)));
-
-    /* Node glow is an identical radial gradient for every node of a given
-       color, just re-centered — pre-rendering it once as a sprite and
-       stamping it with drawImage avoids allocating a new gradient object
-       for every node on every single animation frame (the biggest per-frame
-       cost in this loop, and the main source of mobile jank). Rebuilt
-       whenever dpr changes so the sprite stays crisp on the actual device. */
-    let glowSprites = {};
-    const buildGlowSprite = (color, r) => {
-      const d = r * 2; // CSS-px diameter covering the full radial gradient
-      const sprite = document.createElement('canvas');
-      sprite.width = Math.ceil(d * dpr);
-      sprite.height = Math.ceil(d * dpr);
-      const sctx = sprite.getContext('2d');
-      const cx = sprite.width / 2, cy = sprite.height / 2, sr = r * dpr;
-      const g = sctx.createRadialGradient(cx, cy, 0, cx, cy, sr);
-      g.addColorStop(0, `rgba(${color},0.95)`);
-      g.addColorStop(0.5, `rgba(${color},0.2)`);
-      g.addColorStop(1, `rgba(${color},0)`);
-      sctx.fillStyle = g;
-      sctx.beginPath();
-      sctx.arc(cx, cy, sr, 0, Math.PI * 2);
-      sctx.fill();
-      return sprite;
-    };
-    const buildGlowSprites = () => {
-      glowSprites = {
-        teal: buildGlowSprite(ACCENT, 2.1 * 6),
-        violet: buildGlowSprite(ACCENT2, 2.5 * 6)
-      };
-    };
+    let width, height, dpr;
+    let nodes = [], pulses = [], sparkles = [], shootingStar = null;
+    const ACCENT = '0, 217, 255';     // Vivid Neon Cyan #00D9FF
+    const ACCENT2 = '56, 189, 248';   // Cyber Sky Blue
+    const LINK_DIST = 140;
+    const MOUSE_RADIUS = 130;
+    const mouse = { x: -9999, y: -9999, active: false };
 
     const isMobile = window.innerWidth <= 768;
 
-    const resize = () => {
+    const resizeCanvas = () => {
       dpr = Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2);
       width = window.innerWidth;
-      /* The canvas is position:fixed — content beyond one viewport's
-         height is never visible, so there's no reason to allocate or
-         redraw a backing store the size of the full page. Cap it to
-         the same bound the node/sparkle population already uses. */
-      height = Math.min(document.documentElement.scrollHeight, Math.round(window.innerHeight * 1.6));
+      height = window.innerHeight;
       canvas.width = width * dpr;
       canvas.height = height * dpr;
-      canvas.style.height = height + 'px';
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      buildGlowSprites();
 
-      const target = countFor(width, Math.min(height, window.innerHeight * 1.6));
-      nodes = Array.from({ length: target }, () => ({
+      const targetCount = isMobile ? 26 : 48;
+      nodes = Array.from({ length: targetCount }, () => ({
         x: Math.random() * width,
-        y: Math.random() * Math.min(height, window.innerHeight * 1.6),
-        vx: (Math.random() - 0.5) * 0.25,
-        vy: (Math.random() - 0.5) * 0.25,
-        violet: Math.random() < 0.25
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 0.3,
+        vy: (Math.random() - 0.5) * 0.3,
+        isViolet: Math.random() < 0.3,
+        radius: Math.random() * 1.5 + 1.2
       }));
-      pulses = [];
 
-      // small twinkling sparkles — separate layer, always drifting + fading in/out
-      const sparkleTarget = sparkleCountFor(width, Math.min(height, window.innerHeight * 1.6));
-      sparkles = Array.from({ length: sparkleTarget }, () => ({
+      const sparkleCount = isMobile ? 35 : 70;
+      sparkles = Array.from({ length: sparkleCount }, () => ({
         x: Math.random() * width,
-        y: Math.random() * Math.min(height, window.innerHeight * 1.6),
-        vx: (Math.random() - 0.5) * 0.12,
-        vy: (Math.random() - 0.5) * 0.12,
-        r: Math.random() * 1.1 + 0.4,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 0.1,
+        vy: (Math.random() - 0.5) * 0.1,
+        r: Math.random() * 1.2 + 0.5,
         phase: Math.random() * Math.PI * 2,
-        speed: 0.02 + Math.random() * 0.03,
-        violet: Math.random() < 0.3
+        speed: 0.02 + Math.random() * 0.03
       }));
     };
 
-    /* Track the cursor so nearby nodes can drift away from it */
     window.addEventListener('mousemove', (e) => {
       mouse.x = e.clientX;
-      mouse.y = e.clientY + window.scrollY;
+      mouse.y = e.clientY;
       mouse.active = true;
     }, { passive: true });
     window.addEventListener('mouseleave', () => { mouse.active = false; });
 
-    /* Occasionally fire a bright "signal" that travels along a live link —
-       reads as data flowing through the network rather than static wiring */
-    const maybeSpawnPulse = (linksThisFrame) => {
-      if (prefersReducedMotion) return;
-      if (Math.random() > 0.02) return;
-      if (!linksThisFrame.length) return;
-      const link = linksThisFrame[Math.floor(Math.random() * linksThisFrame.length)];
-      pulses.push({ a: link.a, b: link.b, t: 0, violet: Math.random() < 0.35 });
+    const maybeSpawnPulse = (links) => {
+      if (prefersReducedMotion || !links.length || Math.random() > 0.03) return;
+      const link = links[Math.floor(Math.random() * links.length)];
+      pulses.push({ a: link.a, b: link.b, t: 0, isViolet: Math.random() < 0.35 });
     };
 
-    // Time-based spawn window (one every 6-12s, never more than one live at once)
-    let nextShootingStarAt = prefersReducedMotion ? Infinity : performance.now() + 6000 + Math.random() * 6000;
-
+    let nextStarAt = performance.now() + 5000 + Math.random() * 5000;
     const maybeSpawnShootingStar = () => {
-      if (prefersReducedMotion || shootingStar) return;
-      if (performance.now() < nextShootingStarAt) return;
-
-      // Randomized spawn position along the top band, direction and speed
+      if (prefersReducedMotion || shootingStar || performance.now() < nextStarAt) return;
       const startX = Math.random() * width;
-      const dir = Math.random() < 0.5 ? -1 : 1;                 // left-to-right or right-to-left
-      const angle = (24 + Math.random() * 28) * (Math.PI / 180); // 24°-52° below horizontal
-      const speed = 5.5 + Math.random() * 5;                     // randomized speed
+      const angle = (30 + Math.random() * 25) * (Math.PI / 180);
+      const speed = 7 + Math.random() * 4;
       shootingStar = {
-        x: startX, y: -30 - Math.random() * 40,
-        vx: Math.cos(angle) * speed * dir,
+        x: startX, y: -20,
+        vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        trail: 16 + Math.random() * 10,                          // randomized trail length
         life: 0,
-        maxLife: 90 + Math.random() * 40
+        maxLife: 80 + Math.random() * 30
       };
-      nextShootingStarAt = performance.now() + 6000 + Math.random() * 6000;
+      nextStarAt = performance.now() + 8000 + Math.random() * 6000;
     };
 
-    const drawShootingStar = (dt = 1) => {
+    const drawShootingStar = () => {
       if (!shootingStar) return;
       const s = shootingStar;
-      s.x += s.vx * dt;
-      s.y += s.vy * dt;
-      s.life += dt;
+      s.x += s.vx;
+      s.y += s.vy;
+      s.life++;
 
-      // Ease in, hold, ease out — smoother than a hard cutoff
-      const lifeP = s.life / s.maxLife;
-      const fade = lifeP < 0.15 ? lifeP / 0.15 : lifeP > 0.75 ? Math.max(0, 1 - (lifeP - 0.75) / 0.25) : 1;
+      const p = s.life / s.maxLife;
+      const fade = p < 0.2 ? p / 0.2 : p > 0.7 ? Math.max(0, 1 - (p - 0.7) / 0.3) : 1;
 
-      const tailX = s.x - s.vx * s.trail;
-      const tailY = s.y - s.vy * s.trail;
+      const tailX = s.x - s.vx * 14;
+      const tailY = s.y - s.vy * 14;
       const grad = ctx.createLinearGradient(tailX, tailY, s.x, s.y);
-      grad.addColorStop(0, 'rgba(255,255,255,0)');
-      grad.addColorStop(0.6, `rgba(${ACCENT},${(0.35 * fade).toFixed(2)})`);
-      grad.addColorStop(1, `rgba(255,255,255,${(0.95 * fade).toFixed(2)})`);
+      grad.addColorStop(0, 'rgba(0, 217, 255, 0)');
+      grad.addColorStop(1, `rgba(255, 255, 255, ${(0.9 * fade).toFixed(2)})`);
 
       ctx.save();
-      ctx.shadowBlur = 7;
-      ctx.shadowColor = `rgba(${ACCENT},${(0.6 * fade).toFixed(2)})`;
       ctx.strokeStyle = grad;
       ctx.lineWidth = 1.8;
       ctx.lineCap = 'round';
@@ -193,31 +150,26 @@ document.addEventListener('DOMContentLoaded', () => {
       ctx.moveTo(tailX, tailY);
       ctx.lineTo(s.x, s.y);
       ctx.stroke();
-
-      // Bright core at the head of the star
-      ctx.beginPath();
-      ctx.fillStyle = `rgba(255,255,255,${(0.95 * fade).toFixed(2)})`;
-      ctx.arc(s.x, s.y, 1.4, 0, Math.PI * 2);
-      ctx.fill();
       ctx.restore();
 
-      if (s.y > height * 0.75 || s.x < -80 || s.x > width + 80 || s.life > s.maxLife) shootingStar = null;
+      if (s.y > height + 50 || s.x > width + 50 || s.life >= s.maxLife) shootingStar = null;
     };
 
-    const step = (dt = 1) => {
+    const render = () => {
       ctx.clearRect(0, 0, width, height);
 
+      // Update nodes
       nodes.forEach(n => {
-        n.x += n.vx * dt;
-        n.y += n.vy * dt;
+        n.x += n.vx;
+        n.y += n.vy;
 
-        // gentle repulsion around the cursor
         if (mouse.active) {
-          const dx = n.x - mouse.x, dy = n.y - mouse.y;
-          const dSq = dx * dx + dy * dy;
-          if (dSq < MOUSE_RADIUS * MOUSE_RADIUS && dSq > 0.0001) {
-            const d = Math.sqrt(dSq);
-            const force = (1 - d / MOUSE_RADIUS) * 0.6;
+          const dx = n.x - mouse.x;
+          const dy = n.y - mouse.y;
+          const distSq = dx * dx + dy * dy;
+          if (distSq < MOUSE_RADIUS * MOUSE_RADIUS && distSq > 0.1) {
+            const d = Math.sqrt(distSq);
+            const force = (1 - d / MOUSE_RADIUS) * 0.8;
             n.x += (dx / d) * force;
             n.y += (dy / d) * force;
           }
@@ -227,17 +179,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (n.y < 0 || n.y > height) n.vy *= -1;
       });
 
+      // Draw links
       const liveLinks = [];
-      const LINK_DIST_SQ = LINK_DIST * LINK_DIST;
+      const linkDistSq = LINK_DIST * LINK_DIST;
       for (let i = 0; i < nodes.length; i++) {
         for (let j = i + 1; j < nodes.length; j++) {
           const a = nodes[i], b = nodes[j];
           const dx = a.x - b.x, dy = a.y - b.y;
           const distSq = dx * dx + dy * dy;
-          if (distSq < LINK_DIST_SQ) {
-            const dist = Math.sqrt(distSq); // only computed for pairs already in range
-            const alpha = (1 - dist / LINK_DIST) * 0.5;
-            ctx.strokeStyle = `rgba(${ACCENT},${alpha})`;
+          if (distSq < linkDistSq) {
+            const dist = Math.sqrt(distSq);
+            const alpha = (1 - dist / LINK_DIST) * 0.35;
+            ctx.strokeStyle = `rgba(${ACCENT}, ${alpha.toFixed(2)})`;
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
@@ -247,541 +200,585 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }
       }
+
       maybeSpawnPulse(liveLinks);
       maybeSpawnShootingStar();
-      drawShootingStar(dt);
+      drawShootingStar();
 
-      // glowing nodes (soft radial fill reads as "alive" rather than flat dots)
+      // Draw nodes
       nodes.forEach(n => {
-        const color = n.violet ? ACCENT2 : ACCENT;
-        const r = n.violet ? 2.5 : 2.1;
-        const sprite = n.violet ? glowSprites.violet : glowSprites.teal;
-        const d = r * 12; // 2 * (r * 6), matches the sprite's CSS-px diameter
-        if (sprite) ctx.drawImage(sprite, n.x - d / 2, n.y - d / 2, d, d);
-
+        const color = n.isViolet ? ACCENT2 : ACCENT;
         ctx.beginPath();
-        ctx.fillStyle = `rgba(${color},0.95)`;
-        ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${color}, 0.85)`;
+        ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
         ctx.fill();
       });
 
-      // small drifting, twinkling sparkles — a separate live layer over the network
+      // Draw sparkles
       sparkles.forEach(s => {
-        s.x += s.vx * dt;
-        s.y += s.vy * dt;
+        s.x += s.vx;
+        s.y += s.vy;
         if (s.x < 0) s.x = width; else if (s.x > width) s.x = 0;
         if (s.y < 0) s.y = height; else if (s.y > height) s.y = 0;
-        s.phase += s.speed * dt;
+        s.phase += s.speed;
 
-        const twinkle = (Math.sin(s.phase) + 1) / 2; // 0 -> 1 -> 0
-        const alpha = 0.14 + twinkle * 0.5;
-        const color = s.violet ? ACCENT2 : ACCENT;
+        const twinkle = (Math.sin(s.phase) + 1) / 2;
+        const alpha = 0.15 + twinkle * 0.55;
         ctx.beginPath();
-        ctx.fillStyle = `rgba(${color},${alpha.toFixed(2)})`;
-        ctx.arc(s.x, s.y, s.r * (0.6 + twinkle * 0.7), 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${ACCENT}, ${alpha.toFixed(2)})`;
+        ctx.arc(s.x, s.y, s.r * (0.6 + twinkle * 0.6), 0, Math.PI * 2);
         ctx.fill();
       });
 
-      // advance + draw traveling signal pulses
+      // Draw pulses
       pulses = pulses.filter(p => p.t <= 1);
       pulses.forEach(p => {
         const x = p.a.x + (p.b.x - p.a.x) * p.t;
         const y = p.a.y + (p.b.y - p.a.y) * p.t;
-        const color = p.violet ? ACCENT2 : ACCENT;
-        const glow = ctx.createRadialGradient(x, y, 0, x, y, 6);
-        glow.addColorStop(0, `rgba(${color},0.95)`);
-        glow.addColorStop(1, `rgba(${color},0)`);
-        ctx.fillStyle = glow;
+        const color = p.isViolet ? ACCENT2 : ACCENT;
         ctx.beginPath();
-        ctx.arc(x, y, 6, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${color}, 0.95)`;
+        ctx.arc(x, y, 3, 0, Math.PI * 2);
         ctx.fill();
-        p.t += 0.02 * dt;
+        p.t += 0.025;
       });
+
+      requestAnimationFrame(render);
     };
 
-    let rafId;
-    let loopRunning = false;
-    let frameCount = 0;
-    const loop = () => {
-      frameCount++;
-      if (isMobile && frameCount % 2 !== 0) {
-        rafId = requestAnimationFrame(loop);
-        return;
-      }
-      step(isMobile ? 2 : 1);
-      rafId = requestAnimationFrame(loop);
-    };
-    const startLoop = () => {
-      if (loopRunning || prefersReducedMotion) return;
-      loopRunning = true;
-      loop();
-    };
-    const stopLoop = () => {
-      loopRunning = false;
-      if (rafId) cancelAnimationFrame(rafId);
-    };
-
-    resize();
-    if (prefersReducedMotion) {
-      step(); // draw one static frame, no animation loop
-    } else {
-      startLoop();
-    }
-
-    // Tab hidden (switched away / minimized) — stop drawing entirely
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) stopLoop();
-      else startLoop();
-    });
-
-    let resizeTimer;
-    window.addEventListener('resize', () => {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => {
-        resize();
-        if (prefersReducedMotion) step();
-      }, 200);
-    });
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    if (!prefersReducedMotion) requestAnimationFrame(render);
   }
 
-  /* Ripple on click for every .btn — a short-lived span expanding from the
-     click point, purely decorative and removed once its animation ends */
-  document.querySelectorAll('.btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      if (prefersReducedMotion) return;
-      const rect = btn.getBoundingClientRect();
-      const size = Math.max(rect.width, rect.height);
-      const ripple = document.createElement('span');
-      ripple.className = 'btn-ripple';
-      ripple.style.width = ripple.style.height = `${size}px`;
-      ripple.style.left = `${e.clientX - rect.left - size / 2}px`;
-      ripple.style.top = `${e.clientY - rect.top - size / 2}px`;
-      btn.appendChild(ripple);
-      ripple.addEventListener('animationend', () => ripple.remove());
-    });
-  });
-
-  /* Magnetic hover: nav links and the outline nav button drift a few px
-     toward the cursor, and spring back on mouseleave */
-  if (!prefersReducedMotion && window.matchMedia('(hover: hover)').matches) {
-    document.querySelectorAll('.navbar-nav .nav-link, .navbar-nav .btn-outline-accent').forEach(el => {
-      const strength = 0.3, max = 7;
-      el.addEventListener('mousemove', (e) => {
-        const r = el.getBoundingClientRect();
-        const x = e.clientX - r.left - r.width / 2;
-        const y = e.clientY - r.top - r.height / 2;
-        const dx = Math.max(-max, Math.min(max, x * strength));
-        const dy = Math.max(-max, Math.min(max, y * strength));
-        el.style.transform = `translate(${dx}px, ${dy}px)`;
-      });
-      el.addEventListener('mouseleave', () => { el.style.transform = ''; });
-    });
-
-    // Hero CTAs: same magnetic pull, folded together with their hover-scale
-    // so the JS-set transform doesn't clobber the CSS one (inline wins ties)
-    document.querySelectorAll('.hero-cta .btn').forEach(el => {
-      const strength = 0.22, max = 6;
-      el.addEventListener('mousemove', (e) => {
-        const r = el.getBoundingClientRect();
-        const x = e.clientX - r.left - r.width / 2;
-        const y = e.clientY - r.top - r.height / 2;
-        const dx = Math.max(-max, Math.min(max, x * strength));
-        const dy = Math.max(-max, Math.min(max, y * strength));
-        el.style.transform = `translate(${dx}px, ${dy - 4}px) scale(1.045)`;
-      });
-      el.addEventListener('mouseleave', () => { el.style.transform = ''; });
-    });
-  }
-
-  /* Cursor-tracking glow on project + skill cards — sets --mx/--my in %,
-     which the ::before radial-gradient in style.css reads */
-  if (!prefersReducedMotion && window.matchMedia('(hover: hover)').matches) {
-    document.querySelectorAll('.model-card, .skill-group, .about-card').forEach(card => {
-      card.addEventListener('mousemove', (e) => {
-        const r = card.getBoundingClientRect();
-        card.style.setProperty('--mx', `${((e.clientX - r.left) / r.width) * 100}%`);
-        card.style.setProperty('--my', `${((e.clientY - r.top) / r.height) * 100}%`);
-      });
-    });
-  }
-
-
+  /* ---------------------------------------------------------
+     05. NAVBAR SCROLL EFFECT & ACTIVE STATE
+  --------------------------------------------------------- */
   const nav = document.getElementById('mainNav');
-  if (nav) {
-    if (prefersReducedMotion) {
-      nav.classList.add('nav-in');
-    } else {
-      setTimeout(() => nav.classList.add('nav-in'), 60);
-    }
-  }
   const onScrollNav = () => {
+    if (!nav) return;
     if (window.scrollY > 40) nav.classList.add('scrolled');
     else nav.classList.remove('scrolled');
   };
   onScrollNav();
-  if (nav) scrollCallbacks.push(onScrollNav);
+  scrollCallbacks.push(onScrollNav);
 
-  /* Pause continuously-running decorative CSS animations once their
-     element scrolls off-screen, so they stop costing frame time until
-     they're back in view. Applies everywhere (desktop benefits too),
-     but matters most on mobile where every extra always-on animation
-     competes with scroll for the same frame budget. */
-  if (!prefersReducedMotion) {
-    const pauseOffscreenAnimations = (selector) => {
-      const els = document.querySelectorAll(selector);
-      if (!els.length) return;
-      const obs = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          // Clear the inline override when visible so CSS (including the
-          // existing hover-to-pause rule on the marquees) governs normally;
-          // only force a pause, inline, once it's actually off-screen.
-          entry.target.style.animationPlayState = entry.isIntersecting ? '' : 'paused';
+  const sections = document.querySelectorAll('section[id], header[id]');
+  const navLinks = document.querySelectorAll('.nav-link[data-nav]');
+  const navObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        navLinks.forEach(link => {
+          link.classList.toggle('active', link.getAttribute('href') === `#${id}`);
         });
-      }, { threshold: 0, rootMargin: '100px' });
-      els.forEach(el => obs.observe(el));
-    };
-    pauseOffscreenAnimations('.project-device');
-    pauseOffscreenAnimations('.pipe-node-end');
-    pauseOffscreenAnimations('.marquee-track');
-    pauseOffscreenAnimations('.tag-marquee-track');
-  }
+      }
+    });
+  }, { rootMargin: '-40% 0px -50% 0px', threshold: 0 });
+  sections.forEach(sec => navObserver.observe(sec));
 
-  /* Subtle depth: the aurora and grid background layers drift at slightly
-     different speeds as you scroll, on top of their own idle animation */
-  const bgAurora = document.getElementById('bgAuroraWrap');
-  const bgGrid = document.getElementById('bgGridWrap');
-  if ((bgAurora || bgGrid) && !prefersReducedMotion) {
-    const updateBgParallax = () => {
-      const y = window.scrollY;
-      if (bgAurora) bgAurora.style.transform = `translate3d(0, ${(y * 0.04).toFixed(1)}px, 0)`;
-      if (bgGrid) bgGrid.style.transform = `translate3d(0, ${(y * -0.02).toFixed(1)}px, 0)`;
-    };
-    updateBgParallax();
-    scrollCallbacks.push(updateBgParallax);
-  }
-
-  /* Close mobile nav on link click */
+  /* Close mobile menu on click */
   const navMenu = document.getElementById('navMenu');
   document.querySelectorAll('#navMenu .nav-link, #navMenu .btn').forEach(link => {
     link.addEventListener('click', () => {
-      if (navMenu.classList.contains('show')) {
+      if (navMenu && navMenu.classList.contains('show')) {
         bootstrap.Collapse.getOrCreateInstance(navMenu).hide();
       }
     });
   });
 
-  /* Active nav link on scroll */
-  const sections = document.querySelectorAll('section[id]');
-  const navLinks = document.querySelectorAll('.nav-link[data-nav]');
-
-  const setActive = (id) => {
-    navLinks.forEach(link => {
-      link.classList.toggle('active', link.getAttribute('href') === `#${id}`);
-    });
-  };
-
-  const navObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) setActive(entry.target.id);
-    });
-  }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
-
-  sections.forEach(sec => navObserver.observe(sec));
-
-  /* Reveal-on-scroll */
-  /* Cards sharing a row get a small incremental delay so they cascade in,
-     instead of all popping in on the same frame when the row hits the viewport */
-  document.querySelectorAll('.row').forEach(row => {
-    const staggerTargets = row.querySelectorAll(':scope > div > .model-card, :scope > div > .skill-group');
-    staggerTargets.forEach((el, i) => {
-      el.style.transitionDelay = `${Math.min(i * 0.08, 0.32)}s`;
-    });
-  });
-
-  const revealEls = document.querySelectorAll('.reveal, .reveal-down, .reveal-left, .reveal-right, .reveal-scale');
-
-  if (prefersReducedMotion) {
-    revealEls.forEach(el => el.classList.add('visible'));
-  } else {
-    // Toggle (not unobserve) so every section replays its entrance each time
-    // it scrolls into view, and resets once it scrolls back out — scrolling
-    // down plays it, scrolling back up resets it, scrolling down replays it.
-    // will-change is applied only while a transition is actually running —
-    // promoting every reveal element to its own layer for the page's whole
-    // lifetime is wasted GPU memory/compositing cost, especially on mobile.
-    const clearWillChange = (e) => {
-      if (e.target === e.currentTarget) e.target.style.willChange = 'auto';
-    };
-    const revealObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        const el = entry.target;
-        el.style.willChange = 'transform, opacity';
-        el.addEventListener('transitionend', clearWillChange, { once: true });
-        el.classList.toggle('visible', entry.isIntersecting);
-      });
-    }, { threshold: 0.15, rootMargin: '0px 0px -8% 0px' });
-
-    revealEls.forEach(el => revealObserver.observe(el));
-  }
-
-  /* Hero greeting ("hello, i'm"): split into letters and reveal one by one,
-     slightly ahead of the name so the two reads as a single cascading intro.
-     Hero heading: each word animates up into place — the "line-by-line" reveal.
-     Both replay every time the hero scrolls back into view (not just on load). */
-  const greetingEl = document.getElementById('heroGreeting');
-  if (greetingEl) {
-    const text = greetingEl.textContent;
-    greetingEl.innerHTML = text.split('').map(ch =>
-      ch === ' ' ? ' ' : `<span class="letter">${ch}</span>`
-    ).join('');
-  }
-  const letters = greetingEl ? greetingEl.querySelectorAll('.letter') : [];
-  const heroWords = document.querySelectorAll('#heroTitle .word');
-  const heroEl0 = document.getElementById('top');
-
-  const heroIsMobile = window.matchMedia('(max-width: 767px)').matches;
-
-  const playHeroIntro = () => {
-    gsap.set(letters, { opacity: 0, y: 10 });
-    gsap.to(letters, { opacity: 1, y: 0, duration: 0.5, ease: 'power4.out', stagger: 0.03 });
-    if (heroIsMobile) {
-      gsap.set(heroWords, { opacity: 0, y: 20 });
-      gsap.to(heroWords, { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out', stagger: 0.1, delay: 0.2 });
-    } else {
-      gsap.set(heroWords, { opacity: 0, y: 40, rotateX: -40 });
-      gsap.to(heroWords, {
-        opacity: 1, y: 0, rotateX: 0,
-        duration: 1.12,
-        ease: 'expo.out',
-        stagger: 0.15,
-        delay: 0.3
-      });
-    }
-  };
-  const resetHeroIntro = () => {
-    gsap.set(letters, { opacity: 0, y: 10 });
-    if (heroIsMobile) gsap.set(heroWords, { opacity: 0, y: 20 });
-    else gsap.set(heroWords, { opacity: 0, y: 40, rotateX: -40 });
-  };
-
-  if (prefersReducedMotion || !window.gsap) {
-    letters.forEach(l => { l.style.opacity = 1; });
-    heroWords.forEach(w => { w.style.opacity = 1; });
-  } else if (heroEl0 && (letters.length || heroWords.length)) {
-    const heroIntroObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) playHeroIntro();
-        else resetHeroIntro();
-      });
-    }, { threshold: 0.35 });
-    heroIntroObserver.observe(heroEl0);
-  }
-
-  /* Pause the hero orbital illustrations' CSS animations once they scroll
-     out of view — no reason to keep spinning/pulsing off-screen elements */
-  const heroOrbs = document.querySelector('.hero-orbs');
-  if (heroOrbs && !prefersReducedMotion) {
-    const orbsObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        heroOrbs.classList.toggle('is-offscreen', !entry.isIntersecting);
-      });
-    }, { threshold: 0 });
-    orbsObserver.observe(heroEl0 || heroOrbs);
-  }
-
-  /* Subtle parallax: hero text and portrait drift a few px opposite the
-     cursor, giving the section a sense of depth without being distracting */
-  const heroEl = document.querySelector('.hero');
-  const heroInner = document.querySelector('.hero-inner');
-  if (heroEl && heroInner && !prefersReducedMotion && window.matchMedia('(hover: hover)').matches) {
-    let targetX = 0, targetY = 0, curX = 0, curY = 0;
-    let parallaxRunning = false;
-
-    const parallaxTick = () => {
-      curX += (targetX - curX) * 0.06;
-      curY += (targetY - curY) * 0.06;
-      heroInner.style.transform = `translate3d(${(curX * -6).toFixed(2)}px, ${(curY * -4).toFixed(2)}px, 0)`;
-
-      // Settled close enough to target — stop the loop instead of running forever
-      if (Math.abs(targetX - curX) < 0.001 && Math.abs(targetY - curY) < 0.001) {
-        parallaxRunning = false;
-        heroInner.style.willChange = 'auto';
-        return;
-      }
-      requestAnimationFrame(parallaxTick);
-    };
-    const startParallax = () => {
-      if (parallaxRunning) return;
-      parallaxRunning = true;
-      heroInner.style.willChange = 'transform';
-      requestAnimationFrame(parallaxTick);
-    };
-
-    heroEl.addEventListener('mousemove', (e) => {
-      const r = heroEl.getBoundingClientRect();
-      targetX = ((e.clientX - r.left) / r.width - 0.5) * 2;   // -1 .. 1
-      targetY = ((e.clientY - r.top) / r.height - 0.5) * 2;
-      startParallax();
-    }, { passive: true });
-    heroEl.addEventListener('mouseleave', () => {
-      targetX = 0; targetY = 0;
-      startParallax();
-    });
-  }
-
-  /* Typing effect for hero role */
+  /* ---------------------------------------------------------
+     06. HERO TYPING EFFECT & TERMINAL SIMULATOR
+  --------------------------------------------------------- */
   const roleEl = document.getElementById('roleText');
-  const roles = ['AI/ML Engineer', 'Agentic AI Builder', 'RAG Systems Engineer', 'LLM Application Developer'];
-
+  const roles = [
+    'LLM Engineer',
+    'Machine Learning & Deep Learning',
+    'Data Science & Data Analytics',
+    'Agentic AI & RAG Architectures'
+  ];
   if (roleEl && !prefersReducedMotion) {
-    let roleIndex = 0;
-    let charIndex = roles[0].length;
-    let deleting = false;
-
-    const tick = () => {
-      const current = roles[roleIndex];
+    let rIdx = 0, cIdx = roles[0].length, deleting = false;
+    const typeRole = () => {
+      const current = roles[rIdx];
       if (!deleting) {
-        charIndex++;
-        if (charIndex > current.length) {
+        cIdx++;
+        if (cIdx > current.length) {
           deleting = true;
-          setTimeout(tick, 1600);
+          setTimeout(typeRole, 1800);
           return;
         }
       } else {
-        charIndex--;
-        if (charIndex < 0) {
+        cIdx--;
+        if (cIdx < 0) {
           deleting = false;
-          roleIndex = (roleIndex + 1) % roles.length;
-          charIndex = 0;
+          rIdx = (rIdx + 1) % roles.length;
+          cIdx = 0;
         }
       }
-      roleEl.textContent = current.substring(0, charIndex) || roles[roleIndex].substring(0, charIndex);
-      setTimeout(tick, deleting ? 35 : 65);
+      roleEl.textContent = current.substring(0, cIdx);
+      setTimeout(typeRole, deleting ? 35 : 65);
     };
-    setTimeout(tick, 1800);
+    setTimeout(typeRole, 2000);
   }
 
-  /* Subtle mouse-tilt on project cards */
-  if (!prefersReducedMotion && window.matchMedia('(hover: hover)').matches) {
-    document.querySelectorAll('.model-card').forEach(card => {
-      card.addEventListener('mousemove', (e) => {
-        const rect = card.getBoundingClientRect();
-        const x = (e.clientX - rect.left) / rect.width - 0.5;
-        const y = (e.clientY - rect.top) / rect.height - 0.5;
-        card.style.transform = `perspective(700px) rotateX(${(-y * 6).toFixed(2)}deg) rotateY(${(x * 6).toFixed(2)}deg) translateY(-3px)`;
+  // Hero Terminal Presets
+  const termCommand = document.getElementById('termCommand');
+  const termOutput = document.getElementById('termOutput');
+  const presetChips = document.querySelectorAll('.preset-chip');
+
+  const terminalKnowledge = {
+    explain_rag_architecture: {
+      cmd: 'agent.explain_strengths()',
+      lines: [
+        '> Analyzing Candidate Profile: Pranali Hagare...',
+        '> Specialization: Agentic RAG Pipelines, LangGraph & Full-Stack AI',
+        '> Production Experience: Test Yantra (HireSense & VIKIMO RAG)',
+        '> Research Credentials: IEEE Published Author & Govt. of India Copyright',
+        '> Key Edge: Bridges research models into low-latency production APIs & Web Apps'
+      ]
+    },
+    show_top_projects: {
+      cmd: 'agent.list_production_projects()',
+      lines: [
+        '> [01] HireSense: AI Resume Intelligence (FastAPI, LangGraph, Groq, ChromaDB)',
+        '> [02] VIKIMO Assistant: Automotive Parts RAG Agent (Zero Hallucination)',
+        '> [03] Indian Sign Language: Real-Time LSTM (IEEE Published & Copyrighted)',
+        '> [04] CropSense: 99.32% Accuracy ML Agriculture Recommendation Engine'
+      ]
+    },
+    verify_research: {
+      cmd: 'agent.verify_academic_credentials()',
+      lines: [
+        '> [PAPER] "Real-Time Indian Sign Language Recognition using Deep LSTM"',
+        '> [VENUE] IEEE MITADTSoCiCon 2024 (Peer Reviewed Conference)',
+        '> [PATENT/IP] Copyright Office, Government of India (Registered)',
+        '> [DEGREE] B.E. AI & Data Science (Baramati, CGPA 8.19 Distinction)'
+      ]
+    }
+  };
+
+  presetChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      const key = chip.dataset.cmd;
+      const data = terminalKnowledge[key];
+      if (!data || !termCommand || !termOutput) return;
+
+      termCommand.textContent = data.cmd;
+      termOutput.innerHTML = '';
+      data.lines.forEach((line, i) => {
+        setTimeout(() => {
+          const div = document.createElement('div');
+          div.className = 'term-line ' + (line.includes('[0') || line.includes('[PAPER') ? 'highlight' : line.includes('Distinction') ? 'success' : '');
+          div.textContent = line;
+          termOutput.appendChild(div);
+        }, i * 150);
       });
-      card.addEventListener('mouseleave', () => {
-        card.style.transform = '';
+    });
+  });
+
+  /* ---------------------------------------------------------
+     07. INTERACTIVE AI PLAYGROUND / CHATBOT ENGINE (With Domain Guardrails)
+  --------------------------------------------------------- */
+  const chatForm = document.getElementById('chatForm');
+  const chatInput = document.getElementById('chatInput');
+  const chatMessages = document.getElementById('chatMessages');
+  const suggestedPrompts = document.querySelectorAll('.chat-prompt-pill');
+  const floatingAiBtn = document.getElementById('floatingAiBtn');
+
+  const scrollToAiPlayground = () => {
+    const aiSection = document.getElementById('ai-playground');
+    if (aiSection) {
+      aiSection.scrollIntoView({ behavior: 'smooth' });
+      if (chatInput) chatInput.focus();
+    }
+  };
+  if (floatingAiBtn) floatingAiBtn.addEventListener('click', scrollToAiPlayground);
+
+  const botKnowledge = [
+    // 1. SPECIFIC PROJECTS & CHATBOT INFO FIRST
+    {
+      keywords: ['langgraph simulator', 'langgraph simulator', 'are you langgraph', 'what are you using', 'how are you built', 'powering this', 'built with', 'technology here', 'chatbot technology', 'chatbot built'],
+      response: "This portfolio chatbot is a lightweight **client-side JavaScript agent simulator** designed for instant offline replies without server latency. However, Pranali's production projects (like **HireSense** and **VIKIMO**) are fully powered by **LangGraph state orchestrators**, **LangChain**, and **Groq LLaMA-3.3**!"
+    },
+    {
+      keywords: ['hiresense', 'hire sense', 'resume screening', 'fastapi', 'chromadb', 'groq', 'vercel', 'langgraph project'],
+      response: "<strong>HireSense</strong> is Pranali's flagship full-stack AI Resume Intelligence System:<br><br>&bull; <strong>Backend:</strong> FastAPI with LangGraph state graphs for multi-step agent reasoning.<br>&bull; <strong>RAG &amp; Storage:</strong> ChromaDB vector store + Supabase PostgreSQL.<br>&bull; <strong>Inference:</strong> Groq's LLaMA-3.3-70B for sub-second semantic matching and candidate ranking.<br>&bull; <strong>Live Web App:</strong> Deployed on Render &amp; Vercel (<a href='https://hiresense-seven.vercel.app/' target='_blank' rel='noopener'>Launch Live Demo</a>)."
+    },
+    {
+      keywords: ['vikimo', 'vikmo', 'dealer', 'auto parts', 'parts catalog'],
+      response: "<strong>VIKIMO Assistant</strong> is an enterprise RAG chatbot designed for automotive dealerships. It parses complex automotive parts catalogs, indexes them into ChromaDB, and uses LangChain/LangGraph to provide dealership technicians with instant, zero-hallucination parts lookup."
+    },
+    {
+      keywords: ['cropsense', 'cropsence', 'agriculture', 'crop', 'random forest', 'farmers', 'soil', 'farming', '99.32'],
+      response: "<strong>CropSense</strong> is an applied agriculture ML engine achieving <strong>99.32% test accuracy</strong>. It analyzes 7 soil nutrients (N, P, K) and climate factors (temperature, rainfall, pH, humidity) using a 100-estimator Random Forest classifier across 22 crop classes. Live on GitHub Pages (<a href='https://Pranali3016.github.io/Agriculture-Optimization-Engine' target='_blank' rel='noopener'>Live Web App</a>)."
+    },
+    {
+      keywords: ['job agent', 'job search agent', 'autonomous job', 'bengaluru', 'bengaluru price', 'house price', 'property price'],
+      response: "Pranali built two additional production projects:<br><br>&bull; <strong>Autonomous Job Search Agent:</strong> A LangGraph-powered agent that autonomously searches job portals, evaluates postings, and ranks them based on skill-fit scoring using LLM grading.<br>&bull; <strong>Bengaluru House Price Predictor:</strong> An ML regression pipeline predicting property valuations on 13,000+ records using EDA, dimensionality reduction, and a tuned ensemble regressor with R² score of 0.86."
+    },
+    // 2. ALL PROJECTS & PORTFOLIO ITEMS
+    {
+      keywords: ['project', 'projects', 'what projects', 'show projects', 'all projects', 'portfolio projects', 'what has she built', 'what did she build', 'she built', 'she made', 'her project', 'her projects'],
+      response: "Pranali has built <strong>6 production-grade AI/ML projects</strong>:<br><br>1. 🤖 <strong>HireSense</strong> — LangGraph + FastAPI AI resume intelligence platform (Live)<br>2. 🚗 <strong>VIKIMO</strong> — Enterprise RAG chatbot for automotive dealerships<br>3. 🤟 <strong>Indian Sign Language</strong> — IEEE-published LSTM recognition system (96.25% acc.)<br>4. 🌾 <strong>CropSense</strong> — Agriculture ML engine (99.32% accuracy, Live)<br>5. 💼 <strong>Autonomous Job Agent</strong> — LangGraph-powered self-driving job search agent<br>6. 🏠 <strong>Bengaluru House Price Predictor</strong> — Regression pipeline on 13,000+ records<br><br>Ask about any specific project for architecture details!"
+    },
+    // 3. RESEARCH & PUBLICATIONS
+    {
+      keywords: ['ieee', 'paper', 'research', 'publication', 'copyright', 'sign language', 'isl', 'gesture', 'lstm accuracy', 'signbridge'],
+      response: "Pranali's research on <strong>SignBridge AI / Indian Sign Language Recognition</strong> achieved two major milestones:<br><br>1. <strong>IEEE Conference Paper:</strong> Published at <em>IEEE MITADTSoCiCon 2024</em>, achieving 60 FPS real-time translation using MediaPipe Holistic and PyTorch LSTM sequence models.<br>2. <strong>Government of India Copyright:</strong> Officially registered IP for the software design and methodology with the Copyright Office, Govt. of India."
+    },
+    // 4. TIMELINE, EDUCATION & ROLES
+    {
+      keywords: ['after graduation', 'after college', 'after degree', 'after she graduated', 'what happened after', 'post graduation', 'first job', 'career start', 'career path', 'career journey', 'journey', 'timeline', 'what did she do', 'what has she done', 'career history', 'work history', 'professional journey', 'she did after', 'did after', 'qspiders'],
+      response: "After graduating in <strong>2024</strong>, Pranali's career has moved fast:<br><br>1. <strong>ML Internship (Jun–Dec 2024) — Oasis Infobyte:</strong> Built and evaluated supervised/unsupervised ML models on real-world datasets using scikit-learn, pandas, and EDA pipelines.<br><br>2. <strong>Full-Stack Python Course (Jan–Nov 2025) — QSpiders:</strong> Upskilled in Python, SQL, HTML, CSS, JavaScript, and FastAPI.<br><br>3. <strong>Associate Software Engineer (Nov 2025–Mar 2026) — Test Yantra:</strong> Worked with Python, databases, APIs, LLMs, and RAG-based technologies. Contributed to backend development and data-driven AI tasks, including API integration, database operations, and experimentation with LLM &amp; retrieval-augmented generation workflows.<br><br>She is currently <strong>open to new AI/ML &amp; Data Science opportunities</strong> globally!"
+    },
+    {
+      keywords: ['internship', 'oasis', 'oasis infobyte', 'intern', 'first role', 'ml intern'],
+      response: "Pranali completed an <strong>ML Internship at Oasis Infobyte (Jun–Dec 2024)</strong> right after graduating. She built and evaluated supervised and unsupervised machine learning models, performed exploratory data analysis (EDA) on complex real-world datasets, and implemented predictive pipelines using scikit-learn and pandas."
+    },
+    {
+      keywords: ['work experience', 'experience', 'worked at', 'companies', 'employer', 'previous job', 'current role', 'availability', 'available', 'test yantra'],
+      response: "Pranali's professional experience includes:<br><br>&bull; <strong>Associate Software Engineer — Test Yantra</strong> (Nov 2025 – Mar 2026): Worked with Python, databases, APIs, LLMs, and RAG-based technologies. Contributed to backend development and data-driven AI tasks, including API integration, database operations, and experimentation with LLM &amp; RAG workflows.<br>&bull; <strong>ML Intern — Oasis Infobyte</strong> (Jun–Dec 2024): Supervised/unsupervised ML models, EDA, scikit-learn pipelines.<br>&bull; <strong>Full-Stack Python Course — QSpiders</strong> (Jan–Nov 2025): Python, SQL, HTML, CSS, JavaScript, FastAPI.<br><br>She is currently <strong>immediately available</strong> for full-time AI/ML or Data Science engineering roles globally!"
+    },
+    {
+      keywords: ['education', 'degree', 'college', 'cgpa', 'baramati', 'vpkbiet', 'university', 'graduated', 'graduation', 'studied', 'study', 'b.e', 'bachelor', 'final year', 'academic'],
+      response: "Pranali holds a <strong>Bachelor of Engineering in Artificial Intelligence &amp; Data Science</strong> from VPKBIET Baramati, graduating with distinction (<strong>CGPA 8.19</strong>). During her degree (2020–2024), she authored her IEEE-published research on Indian Sign Language and built the 99.32% accuracy CropSense engine."
+    },
+    // 5. SKILLS & CAPABILITIES
+    {
+      keywords: ['skills', 'stack', 'tech', 'tools', 'languages', 'frameworks', 'what can she do', 'what does she know', 'technologies', 'supervised', 'unsupervised'],
+      response: "Pranali's core tech stack includes:<br><br>&bull; <strong>Agentic AI &amp; LLMs:</strong> LangGraph, LangChain, RAG, ChromaDB, Groq LLaMA-3.3, Prompt Engineering<br>&bull; <strong>Core ML &amp; Deep Learning:</strong> Supervised &amp; Unsupervised ML, scikit-learn, Random Forest, LSTM, Sequence Models, Evaluation Metrics, NLP &amp; Transformers<br>&bull; <strong>Backend &amp; Infra:</strong> Python 3.11+, FastAPI, Flask, Docker, Git, SQL, HTML/CSS, JavaScript<br>&bull; <strong>Databases &amp; Analytics:</strong> Supabase, PostgreSQL, MySQL, pandas, NumPy, EDA"
+    },
+    // 6. CONTACT & HIRE
+    {
+      keywords: ['contact', 'email', 'reach', 'linkedin', 'connect', 'interview', 'hire her', 'call', 'get in touch', 'how to contact'],
+      response: "You can reach Pranali directly through:<br><br>&bull; <strong>Email:</strong> <a href='mailto:pranalihagare@gmail.com'>pranalihagare@gmail.com</a><br>&bull; <strong>LinkedIn:</strong> <a href='https://www.linkedin.com/in/pranali-hagare/' target='_blank' rel='noopener'>linkedin.com/in/pranali-hagare</a><br>&bull; <strong>GitHub:</strong> <a href='https://github.com/Pranali3016' target='_blank' rel='noopener'>github.com/Pranali3016</a><br>&bull; <strong>Availability:</strong> Immediate / Open globally."
+    },
+    {
+      keywords: ['hire', 'why hire', 'unique', 'choose', 'strengths', 'fit', 'advantage', 'should we', 'good candidate', 'right person'],
+      response: "Pranali brings a rare combination of <strong>deep academic rigor</strong> and <strong>production-first engineering</strong>:<br><br>1. <strong>Production Agentic AI:</strong> Built <em>HireSense</em> (LangGraph, FastAPI, ChromaDB, Groq LLaMA-3.3-70B) &amp; <em>VIKIMO</em> dealer RAG assistant.<br>2. <strong>Published Researcher:</strong> Authored peer-reviewed Indian Sign Language LSTM paper at <em>IEEE MITADTSoCiCon 2024</em>.<br>3. <strong>Government Registered Copyright:</strong> Official software IP holder with the Govt. of India.<br>4. <strong>ML Precision:</strong> Built <em>CropSense</em> achieving 99.32% test accuracy.<br><br>She is available immediately for AI/ML &amp; Agentic Engineering roles!"
+    },
+    // 7. PERSONAL DETAILS & NON-PROFESSIONAL FILTERS
+    {
+      keywords: ['age', 'old is', 'birthday', 'birth date', 'born', 'birthdate'],
+      response: "I specialize in Pranali's professional background, technical projects, and research. I do not store or share her personal details like age or date of birth. For details on her academic and career timeline, please feel free to check her <a href='#experience'>Career Timeline</a> or <a href='assets/CV_Pranali_Hagare.pdf' download>download her resume</a>!"
+    },
+    {
+      keywords: ['salary', 'package', 'compensation', 'fees', 'charge', 'cost to hire', 'expected salary'],
+      response: "For discussions regarding salary expectations, compensation packages, or contracting rates, please connect with Pranali directly via email at <a href='mailto:pranalihagare@gmail.com'>pranalihagare@gmail.com</a>."
+    },
+    {
+      keywords: ['personal life', 'married', 'relationship', 'boyfriend', 'husband', 'single', 'spouse', 'hobbies', 'hobby', 'hometown', 'address', 'home', 'live in', 'living'],
+      response: "I am an AI assistant focused on Pranali's professional engineering profile. I do not store information on her personal life, relationships, or hobbies. Feel free to ask about her technical skills, projects like <em>HireSense</em>, or her research publications!"
+    },
+    // 8. GENERIC INTENTS LAST (prevent generic phrase from stealing specific project query matches)
+    {
+      keywords: ['who is', 'who are you', 'tell me about her', 'tell me about pranali', 'introduce', 'background', 'overview', 'summary', 'profile', 'tell me about herself'],
+      response: "I'm Pranali's AI Portfolio Assistant! Here's a quick overview of <strong>Pranali Hagare</strong>:<br><br>She is an <strong>AI/ML Engineer</strong> specializing in Agentic AI, LangGraph RAG systems, and Deep Learning.<br><br>&bull; 🎓 <strong>B.E. in AI &amp; Data Science</strong> — VPKBIET Baramati (CGPA 8.19)<br>&bull; 📄 <strong>IEEE Published Researcher</strong> — Indian Sign Language (96.25% LSTM accuracy)<br>&bull; 🛡️ <strong>Government of India Copyright Holder</strong><br>&bull; 🚀 Production systems: HireSense, VIKIMO, CropSense, Job Agent<br>&bull; ⚡ Available immediately for global AI/ML roles<br><br>Ask me anything about her projects, tech stack, or research!"
+    }
+  ];
+
+  // Context-aware off-topic detection — understands pronouns and relative questions
+  const isOffTopicQuery = (query) => {
+    const lower = query.toLowerCase();
+
+    // Exclude personal detail keywords from normal portfolio contextual queries
+    const personalKeywords = ['age', 'old is', 'birthday', 'born', 'salary', 'married', 'boyfriend', 'husband', 'relationship', 'hobby', 'hobbies'];
+    const containsPersonal = personalKeywords.some(pw => lower.includes(pw));
+
+    // If it's not a personal query, check contextual pronouns
+    if (!containsPersonal) {
+      const contextualPronouns = [
+        'she', 'her', 'hers', 'what did', 'what has', 'what does', 'what is she',
+        'what was she', 'what did she', 'tell me', 'after graduation', 'after college',
+        'career path', 'professional', 'journey', 'timeline', 'history', 'story',
+        'how did', 'when did', 'where did', 'which', 'what are', 'has she', 'had she',
+        'did she', 'has pranali', 'did pranali', 'about her', 'her experience',
+        'her background', 'her skills', 'her projects', 'her research', 'she worked',
+        'she built', 'she studied', 'she graduated', 'she did', 'she has', 'she was',
+        'after degree', 'post graduation', 'first job', 'job after'
+      ];
+      if (contextualPronouns.some(p => lower.includes(p))) return false;
+    }
+
+    // Known relevant domain topics
+    const relevantTerms = [
+      'pranali', 'hire', 'project', 'hiresense', 'vikimo', 'cropsense', 'sign language',
+      'isl', 'lstm', 'ieee', 'paper', 'research', 'publication', 'copyright', 'langgraph',
+      'rag', 'groq', 'llama', 'fastapi', 'skill', 'stack', 'experience', 'internship',
+      'test yantra', 'oasis', 'education', 'degree', 'vpkbiet', 'cgpa', 'contact',
+      'email', 'linkedin', 'github', 'resume', 'cv', 'job', 'agent', 'machine learning',
+      'deep learning', 'computer vision', 'bengaluru', 'house price', 'ai', 'ml', 'python',
+      'work', 'background', 'about', 'who are you', 'availability', 'location', 'role',
+      'what do you do', 'strengths', 'qualification', 'career', 'graduate', 'graduation',
+      'journey', 'timeline', 'history', 'overview', 'summary', 'profile', 'tell', 'built',
+      'made', 'created', 'developed', 'worked', 'studied', 'completed', 'achieved',
+      'university', 'college', 'after', 'before', 'when', 'where', 'how', 'why',
+      'technologies', 'frameworks', 'tools', 'language', 'framework', 'pytorch',
+      'tensorflow', 'chromadb', 'docker', 'flask', 'supabase', 'postgresql',
+      'oasis infobyte', 'internship', 'projects', 'all projects', 'portfolio'
+    ];
+
+    if (relevantTerms.some(term => lower.includes(term))) return false;
+
+    // Truly off-topic triggers only
+    const offTopicTriggers = [
+      'gandhi', 'weather', 'recipe', 'cook', 'cricket', 'football', 'game',
+      'movie', 'song', 'president', 'prime minister', 'modi', 'trump', 'biden',
+      'what is the meaning of life', 'capital of', 'math problem', 'translate',
+      'tell me a story', 'tell me a joke', 'write a poem', 'stupid', 'hack'
+    ];
+    if (offTopicTriggers.some(trigger => lower.includes(trigger))) return true;
+
+    // Short vague queries that have no context — ask for clarification instead
+    if (lower.split(' ').length <= 2) return false; // let short queries try to match
+
+    return true;
+  };
+
+  const getBotResponse = (query) => {
+    const lower = query.toLowerCase();
+
+    // Check for matched knowledge first (keyword matching)
+    for (const item of botKnowledge) {
+      if (item.keywords.some(kw => lower.includes(kw))) {
+        return item.response;
+      }
+    }
+
+    // Check if off-topic
+    if (isOffTopicQuery(query)) {
+      return "I can only answer questions about <strong>Pranali Hagare's</strong> professional background, AI/ML projects, research, and career. Try asking:<br><br>&bull; \"What did she do after graduation?\"<br>&bull; \"Tell me about HireSense\"<br>&bull; \"What is her tech stack?\"<br>&bull; \"Why should we hire Pranali?\"";
+    }
+
+    // Context-aware fallback — if the question seems to be about her but doesn't match a specific topic
+    return `<strong>Pranali Hagare</strong> is an AI/ML Engineer with expertise in LangGraph, RAG systems, and Deep Learning. She has an <strong>IEEE Publication</strong>, <strong>Govt. Copyright</strong>, and production systems like <em>HireSense</em> and <em>CropSense</em>.<br><br>Could you be more specific? Try asking about her <a href='#work'>projects</a>, <a href='#stack'>skills</a>, <a href='#experience'>career timeline</a>, or <a href='#research'>research</a>!`;
+  };
+
+
+  const appendMessage = (sender, htmlText) => {
+    if (!chatMessages) return;
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `chat-msg ${sender}-msg`;
+    msgDiv.innerHTML = `
+      <div class="msg-avatar">${sender === 'user' ? '👤' : '✦'}</div>
+      <div class="msg-content"><p>${htmlText}</p></div>
+    `;
+    chatMessages.appendChild(msgDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  };
+
+  const handleUserQuery = (text) => {
+    const cleanText = text.trim();
+    if (!cleanText) return;
+
+    appendMessage('user', cleanText);
+    if (chatInput) chatInput.value = '';
+
+    // Show typing simulation
+    const typingDiv = document.createElement('div');
+    typingDiv.className = 'chat-msg bot-msg typing-msg';
+    typingDiv.innerHTML = `
+      <div class="msg-avatar">✦</div>
+      <div class="msg-content"><p><em>Streaming response... ⚡</em></p></div>
+    `;
+    chatMessages.appendChild(typingDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    setTimeout(() => {
+      typingDiv.remove();
+      const botAns = getBotResponse(cleanText);
+      appendMessage('bot', botAns);
+    }, 450);
+  };
+
+  if (chatForm) {
+    chatForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      handleUserQuery(chatInput.value);
+    });
+  }
+
+  suggestedPrompts.forEach(pill => {
+    pill.addEventListener('click', () => {
+      handleUserQuery(pill.dataset.query);
+    });
+  });
+
+  /* ---------------------------------------------------------
+     08. QUICK COPY ACTIONS & COMING SOON PROJECT TOASTS
+  --------------------------------------------------------- */
+  const quickCopyEmailBtn = document.getElementById('quickCopyEmailBtn');
+  if (quickCopyEmailBtn) {
+    quickCopyEmailBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText('pranalihagare@gmail.com').then(() => {
+        showToast('Email copied: pranalihagare@gmail.com');
       });
     });
   }
 
-  /* Timeline: line grows as you scroll through the section, tracking how
-     far the viewport center has moved through the timeline's height */
-  const timelineEl = document.querySelector('.timeline');
-  if (timelineEl) {
-    const updateTimelineProgress = () => {
-      const r = timelineEl.getBoundingClientRect();
-      const vh = window.innerHeight;
-      const progress = (vh * 0.5 - r.top) / r.height;
-      timelineEl.style.setProperty('--progress', Math.max(0, Math.min(1, progress)).toFixed(3));
-    };
-    updateTimelineProgress();
-    scrollCallbacks.push(updateTimelineProgress);
-    let timelineResizeTimer;
-    window.addEventListener('resize', () => {
-      clearTimeout(timelineResizeTimer);
-      timelineResizeTimer = setTimeout(updateTimelineProgress, 150);
+  // Coming soon project handler
+  const comingSoonBtns = document.querySelectorAll('.btn-coming-soon');
+  comingSoonBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      showToast('Coming Soon! Pranali is currently developing this autonomous agent.');
     });
-  }
-
-  /* Animated number counters on project metrics — counts up from 0 to the
-     stated value the first time each metric scrolls into view */
-  const counterEls = document.querySelectorAll('.m-val');
-  if (counterEls.length && !prefersReducedMotion) {
-    counterEls.forEach(el => {
-      const raw = el.textContent.trim();
-      const match = raw.match(/^([\d.]+)(.*)$/); // leading number + trailing suffix (%, etc.)
-      if (match) el.dataset.countTarget = match[1] + '|' + match[2];
-    });
-
-    const runCounter = (el) => {
-      const stored = el.dataset.countTarget;
-      if (!stored) return; // non-numeric metrics like "IEEE" or "©" stay as-is
-      const [numStr, suffix] = stored.split('|');
-      const target = parseFloat(numStr);
-      const decimals = (numStr.split('.')[1] || '').length;
-      const duration = 900;
-      const start = performance.now();
-      el.dataset.countRun = String(start); // lets a fresh run supersede a stale one in flight
-      const tick = (now) => {
-        if (el.dataset.countRun !== String(start)) return; // superseded by a newer run
-        const p = Math.min(1, (now - start) / duration);
-        const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
-        el.textContent = (target * eased).toFixed(decimals) + suffix;
-        if (p < 1) requestAnimationFrame(tick);
-      };
-      requestAnimationFrame(tick);
-    };
-
-    const counterObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        const el = entry.target;
-        if (entry.isIntersecting) {
-          runCounter(el);
-        } else if (el.dataset.countTarget) {
-          el.dataset.countRun = '';
-          const [numStr, suffix] = el.dataset.countTarget.split('|');
-          el.textContent = (0).toFixed((numStr.split('.')[1] || '').length) + suffix;
-        }
-      });
-    }, { threshold: 0.6 });
-    counterEls.forEach(el => counterObserver.observe(el));
-  }
-
-  /* Ambient glow that follows the cursor within the contact section */
-  const contactSection = document.getElementById('contact');
-  const contactGlow = document.querySelector('.contact-glow');
-  if (contactSection && contactGlow && !prefersReducedMotion && window.matchMedia('(hover: hover)').matches) {
-    contactSection.addEventListener('mousemove', (e) => {
-      const r = contactSection.getBoundingClientRect();
-      contactGlow.style.setProperty('--mx', `${((e.clientX - r.left) / r.width) * 100}%`);
-      contactGlow.style.setProperty('--my', `${((e.clientY - r.top) / r.height) * 100}%`);
-    });
-  }
+  });
 
 
-  const form = document.getElementById('contactForm');
-  const status = document.getElementById('formStatus');
 
-  if (form) {
-    form.addEventListener('submit', (e) => {
+
+  /* ---------------------------------------------------------
+     09. CONTACT FORM SUBMISSION — Formspree (direct to Gmail)
+     HOW TO ACTIVATE:
+       1. Go to https://formspree.io and sign up free
+       2. Create a new form, set email to pranalihagare@gmail.com
+       3. Copy your endpoint (looks like: https://formspree.io/f/xabcdefg)
+       4. Paste it as the FORMSPREE_ENDPOINT value below
+  --------------------------------------------------------- */
+  const FORMSPREE_ENDPOINT = 'https://formspree.io/f/xzepeyvb'; // ← replace YOUR_FORM_ID
+
+  const contactForm = document.getElementById('contactForm');
+  const formStatus  = document.getElementById('formStatus');
+  const submitBtn   = document.getElementById('contactSubmitBtn');
+  const submitBtnText = document.getElementById('submitBtnText');
+
+  if (contactForm) {
+    contactForm.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const name = document.getElementById('cf-name').value.trim();
-      const email = document.getElementById('cf-email').value.trim();
+      const name    = document.getElementById('cf-name').value.trim();
+      const email   = document.getElementById('cf-email').value.trim();
+      const subject = document.getElementById('cf-subject')?.value.trim() || 'Portfolio Inquiry';
       const message = document.getElementById('cf-message').value.trim();
 
       if (!name || !email || !message) {
-        status.classList.remove('success');
-        status.textContent = 'Please fill in every field.';
-        status.style.color = 'var(--warn)';
+        if (formStatus) {
+          formStatus.style.color = '#FF5F56';
+          formStatus.textContent = 'Please fill out all required fields.';
+        }
         return;
       }
 
-      const subject = encodeURIComponent(`Portfolio contact from ${name}`);
-      const body = encodeURIComponent(`${message}\n\n— ${name} (${email})`);
-      window.location.href = `mailto:pranalihagare@gmail.com?subject=${subject}&body=${body}`;
+      // Populate hidden Formspree fields
+      const replytoField = document.getElementById('cf-replyto');
+      const subjectField = document.getElementById('cf-subject-hidden');
+      if (replytoField) replytoField.value = email;
+      if (subjectField) subjectField.value = `[Portfolio] ${subject} — from ${name}`;
 
-      status.style.color = 'var(--accent)';
-      status.classList.add('success');
-      status.innerHTML = '<span class="status-check">✓</span> Opening your email client…';
-      form.reset();
+      // Loading state
+      if (submitBtn) submitBtn.disabled = true;
+      if (submitBtnText) submitBtnText.textContent = 'Sending...';
+      if (formStatus) { formStatus.style.color = 'var(--text-muted)'; formStatus.textContent = ''; }
+
+      // Check if endpoint is configured
+      if (FORMSPREE_ENDPOINT.includes('YOUR_FORM_ID')) {
+        // Fallback: open email client if Formspree not yet configured
+        const mailtoSubject = encodeURIComponent(`[Portfolio] ${subject} - from ${name}`);
+        const mailtoBody    = encodeURIComponent(`Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`);
+        window.location.href = `mailto:pranalihagare@gmail.com?subject=${mailtoSubject}&body=${mailtoBody}`;
+        if (submitBtnText) submitBtnText.textContent = 'Send Message';
+        if (submitBtn) submitBtn.disabled = false;
+        if (formStatus) { formStatus.style.color = 'var(--accent)'; formStatus.textContent = '✓ Opening email client...'; }
+        showToast('Formspree not configured yet — opening email client instead.');
+        return;
+      }
+
+      try {
+        const formData = new FormData(contactForm);
+        const response = await fetch(FORMSPREE_ENDPOINT, {
+          method: 'POST',
+          body: formData,
+          headers: { 'Accept': 'application/json' }
+        });
+
+        if (response.ok) {
+          if (formStatus) {
+            formStatus.style.color = '#34D399';
+            formStatus.innerHTML = '<span>✓</span> Message sent! I\'ll reply within 24 hours.';
+          }
+          showToast('✓ Message delivered to Pranali\'s inbox!');
+          contactForm.reset();
+        } else {
+          const data = await response.json();
+          const errMsg = data?.errors?.map(e => e.message).join(', ') || 'Something went wrong.';
+          if (formStatus) { formStatus.style.color = '#FF5F56'; formStatus.textContent = errMsg; }
+          showToast('Failed to send. Please email directly: pranalihagare@gmail.com');
+        }
+      } catch (err) {
+        if (formStatus) { formStatus.style.color = '#FF5F56'; formStatus.textContent = 'Network error. Please try again.'; }
+        showToast('Network error — please email directly: pranalihagare@gmail.com');
+      } finally {
+        if (submitBtnText) submitBtnText.textContent = 'Send Message';
+        if (submitBtn) submitBtn.disabled = false;
+      }
     });
   }
 
-  /* One passive listener drives every scroll-dependent update registered
-     above, throttled to a single rAF pass per frame. */
+
+  /* ---------------------------------------------------------
+     10. REVEAL-ON-SCROLL & NUMBER COUNTERS
+  --------------------------------------------------------- */
+  const revealEls = document.querySelectorAll('.reveal, .reveal-left, .reveal-right, .reveal-down, .reveal-scale');
+  if (prefersReducedMotion) {
+    revealEls.forEach(el => el.classList.add('visible'));
+  } else {
+    const revealObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -50px 0px' });
+    revealEls.forEach(el => revealObserver.observe(el));
+  }
+
+  // Animated metric counters
+  const metricValues = document.querySelectorAll('.m-val, .r-inline-val');
+  if (!prefersReducedMotion && metricValues.length) {
+    const counterObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting && !entry.target.dataset.counted) {
+          entry.target.dataset.counted = 'true';
+          const raw = entry.target.textContent.trim();
+          const match = raw.match(/^([\d.]+)(.*)$/);
+          if (match) {
+            const targetNum = parseFloat(match[1]);
+            const suffix = match[2];
+            const decimals = (match[1].split('.')[1] || '').length;
+            let start = 0;
+            const duration = 1200;
+            const startTime = performance.now();
+
+            const animateCounter = (now) => {
+              const p = Math.min(1, (now - startTime) / duration);
+              const easeP = 1 - Math.pow(1 - p, 3);
+              entry.target.textContent = (targetNum * easeP).toFixed(decimals) + suffix;
+              if (p < 1) requestAnimationFrame(animateCounter);
+            };
+            requestAnimationFrame(animateCounter);
+          }
+        }
+      });
+    }, { threshold: 0.5 });
+    metricValues.forEach(el => counterObserver.observe(el));
+  }
+
+  // Timeline scroll progress bar
+  const timelineEl = document.querySelector('.timeline');
+  if (timelineEl) {
+    const updateTimeline = () => {
+      const rect = timelineEl.getBoundingClientRect();
+      const vh = window.innerHeight;
+      const progress = (vh * 0.5 - rect.top) / rect.height;
+      timelineEl.style.setProperty('--progress', Math.max(0, Math.min(1, progress)).toFixed(3));
+    };
+    updateTimeline();
+    scrollCallbacks.push(updateTimeline);
+  }
+
+  // Run all scroll callbacks
   if (scrollCallbacks.length) {
     window.addEventListener('scroll', onSharedScroll, { passive: true });
   }
