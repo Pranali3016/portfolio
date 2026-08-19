@@ -403,7 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
     },
     {
       keywords: ['hiresense', 'hire sense', 'resume screening', 'fastapi', 'chromadb', 'groq', 'vercel', 'langgraph project'],
-      response: "<strong>HireSense</strong> is Pranali's flagship full-stack AI Resume Intelligence System:<br><br>&bull; <strong>Backend:</strong> FastAPI with LangGraph state graphs for multi-step agent reasoning.<br>&bull; <strong>RAG &amp; Storage:</strong> ChromaDB vector store + Supabase PostgreSQL.<br>&bull; <strong>Inference:</strong> Groq's LLaMA-3.3-70B for sub-second semantic matching and candidate ranking.<br>&bull; <strong>Live Web App:</strong> Deployed on Render &amp; Vercel (<a href='https://hiresense-seven.vercel.app/' target='_blank' rel='noopener'>Launch Live Demo</a>)."
+      response: "<strong>HireSense</strong> is Pranali's flagship full-stack AI Resume Intelligence System:<br><br>&bull; <strong>Backend:</strong> FastAPI with LangGraph state graphs for multi-step agent reasoning.<br>&bull; <strong>RAG &amp; Storage:</strong> ChromaDB vector store + Supabase PostgreSQL.<br>&bull; <strong>Inference:</strong> Groq's LLaMA-3.3-70B for sub-second semantic matching and candidate ranking.<br>&bull; <strong>Live Web App:</strong> Deployed on Render &amp; Vercel (<a href='https://hiresense-vert.vercel.app/' target='_blank' rel='noopener'>Launch Live Demo</a>)."
     },
     {
       keywords: ['vikimo', 'vikmo', 'dealer', 'auto parts', 'parts catalog'],
