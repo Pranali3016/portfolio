@@ -333,7 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
       lines: [
         '> Analyzing Candidate Profile: Pranali Hagare...',
         '> Specialization: Agentic RAG Pipelines, LangGraph & Full-Stack AI',
-        '> Production Experience: Test Yantra (HireSense & VIKIMO RAG)',
+        '> Production Experience: Leometric Technology Pvt Ltd (Python Developer)',
         '> Research Credentials: IEEE Published Author & Govt. of India Copyright',
         '> Key Edge: Bridges research models into low-latency production APIs & Web Apps'
       ]
@@ -429,16 +429,16 @@ document.addEventListener('DOMContentLoaded', () => {
     },
     // 4. TIMELINE, EDUCATION & ROLES
     {
-      keywords: ['after graduation', 'after college', 'after degree', 'after she graduated', 'what happened after', 'post graduation', 'first job', 'career start', 'career path', 'career journey', 'journey', 'timeline', 'what did she do', 'what has she done', 'career history', 'work history', 'professional journey', 'she did after', 'did after', 'qspiders', 'leometric'],
-      response: "Pranali's career timeline:<br><br>1. <strong>Python Developer Intern (Jul 2026–Present) — Leometric Technology Pvt Ltd:</strong> Designing &amp; implementing RESTful APIs with Django REST Framework (DRF), JWT/OAuth, RBAC permissions, PostgreSQL/MySQL, Postman, and Git/GitLab.<br><br>2. <strong>Associate Software Engineer (Nov 2025–Mar 2026) — Test Yantra:</strong> Python, APIs, databases, LLMs, and RAG workflows.<br><br>3. <strong>Full-Stack Python Course (Jan–Nov 2025) — QSpiders:</strong> Python, SQL, HTML, CSS, JavaScript, FastAPI.<br><br>4. <strong>ML Intern (Jun–Dec 2024) — Oasis Infobyte:</strong> Supervised/unsupervised ML, EDA, scikit-learn."
+      keywords: ['after graduation', 'after college', 'after degree', 'after she graduated', 'what happened after', 'post graduation', 'first job', 'career start', 'career path', 'career journey', 'journey', 'timeline', 'what did she do', 'what has she done', 'career history', 'work history', 'professional journey', 'she did after', 'did after', 'leometric'],
+      response: "Pranali's career timeline:<br><br>1. <strong>Python Developer (Jun 2026–Present) — Leometric Technology Pvt Ltd:</strong> Designing &amp; developing secure RESTful backend APIs using Python &amp; FastAPI, JWT/Google OAuth authentication, RBAC permissions, PostgreSQL/MySQL database modeling, Postman API testing, and Git/GitLab/GitHub workflows.<br><br>2. <strong>Python Developer Intern (Dec 2024–May 2025):</strong> Engineered modular Python backend scripts, REST API endpoints, EDA, feature selection, data cleaning, and ML data prep pipelines."
     },
     {
-      keywords: ['internship', 'leometric', 'leometric technology', 'drf', 'django', 'oasis', 'oasis infobyte', 'intern', 'first role', 'ml intern', 'python intern'],
-      response: "Pranali's internship experience:<br><br>&bull; <strong>Python Developer Intern — Leometric Technology Pvt Ltd (Jul 2026–Present):</strong> Designing RESTful APIs using Django REST Framework (DRF), implementing JWT auth, Google OAuth, role-based access control (RBAC), PostgreSQL/MySQL databases, Postman API testing, and Git/GitLab workflows.<br><br>&bull; <strong>ML Intern — Oasis Infobyte (Jun–Dec 2024):</strong> Built and evaluated supervised &amp; unsupervised ML models and predictive scikit-learn pipelines."
+      keywords: ['internship', 'leometric', 'leometric technology', 'intern', 'first role', 'python intern'],
+      response: "Pranali's professional role &amp; internship experience:<br><br>&bull; <strong>Python Developer — Leometric Technology Pvt Ltd (Jun 2026–Present):</strong> Designing secure RESTful backend APIs with Python &amp; FastAPI, JWT/OAuth, RBAC permissions, PostgreSQL/MySQL database schemas, Postman, and Git/GitLab/GitHub.<br><br>&bull; <strong>Python Developer Intern (Dec 2024–May 2025):</strong> Engineered modular Python scripts, REST APIs, EDA, feature selection, and data cleaning with Pandas &amp; NumPy."
     },
     {
-      keywords: ['work experience', 'experience', 'worked at', 'companies', 'employer', 'previous job', 'current role', 'availability', 'available', 'test yantra', 'leometric'],
-      response: "Pranali's professional experience includes:<br><br>&bull; <strong>Python Developer Intern — Leometric Technology Pvt Ltd</strong> (Jul 2026 – Present): RESTful APIs, Django REST Framework (DRF), JWT/OAuth, RBAC permissions, PostgreSQL/MySQL, Postman, Git/GitLab.<br>&bull; <strong>Associate Software Engineer — Test Yantra</strong> (Nov 2025 – Mar 2026): Python, APIs, databases, LLM &amp; RAG workflows.<br>&bull; <strong>ML Intern — Oasis Infobyte</strong> (Jun–Dec 2024): Supervised/unsupervised ML models, EDA, scikit-learn pipelines.<br>&bull; <strong>Full-Stack Python Course — QSpiders</strong> (Jan–Nov 2025): Python, SQL, HTML, CSS, JavaScript, FastAPI."
+      keywords: ['work experience', 'experience', 'worked at', 'companies', 'employer', 'previous job', 'current role', 'availability', 'available', 'leometric'],
+      response: "Pranali's professional experience includes:<br><br>&bull; <strong>Python Developer — Leometric Technology Pvt Ltd</strong> (Jun 2026 – Present): RESTful APIs, FastAPI, JWT/Google OAuth, RBAC, PostgreSQL/MySQL, Postman, Git/GitLab/GitHub.<br>&bull; <strong>Python Developer Intern</strong> (Dec 2024 – May 2025): Python REST APIs, EDA, Pandas/NumPy ML data pipelines, Git."
     },
     {
       keywords: ['education', 'degree', 'college', 'cgpa', 'baramati', 'vpkbiet', 'university', 'graduated', 'graduation', 'studied', 'study', 'b.e', 'bachelor', 'final year', 'academic'],
