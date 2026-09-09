@@ -461,7 +461,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 7. PERSONAL DETAILS & NON-PROFESSIONAL FILTERS
     {
       keywords: ['age', 'old is', 'birthday', 'birth date', 'born', 'birthdate'],
-      response: "I specialize in Pranali's professional background, technical projects, and research. I do not store or share her personal details like age or date of birth. For details on her academic and career timeline, please feel free to check her <a href='#experience'>Career Timeline</a> or <a href='assets/CV_Pranali_Hagare.pdf' download>download her resume</a>!"
+      response: "I specialize in Pranali's professional background, technical projects, and research. I do not store or share her personal details like age or date of birth. For details on her academic and career timeline, please feel free to check her <a href='#experience'>Career Timeline</a> or <a href='assets/Pranali_Hagare_Resume.docx' download>download her resume</a>!"
     },
     {
       keywords: ['salary', 'package', 'compensation', 'fees', 'charge', 'cost to hire', 'expected salary'],
